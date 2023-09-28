@@ -13,7 +13,7 @@ default_region <- "CD"
 # For a location lock placeholder in advanced options
 default_random_address <- "207 4th Street, Courtenay, BC"
 
-map_zoom <- 9.1
+map_zoom <- 9.9
 map_loc <- c(lat = -124.98, lon = 49.68)
 
 

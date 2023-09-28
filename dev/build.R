@@ -139,10 +139,10 @@ scales_variables_modules <-
           all_scales = all_scales, data_output_path = "dev/data/ndvi/", 
           crs = crs)
 
-# Add access to amenities module
-traveltimes <-
-  accessibility_get_travel_times(region_DA_IDs = census_scales$DA$ID)
-qs::qsave(traveltimes, "dev/data/built/traveltimes.qs")
+# # Add access to amenities module
+# traveltimes <-
+#   accessibility_get_travel_times(region_DA_IDs = census_scales$DA$ID)
+# qs::qsave(traveltimes, "dev/data/built/traveltimes.qs")
 traveltimes <- qs::qread("dev/data/built/traveltimes.qs")
 
 save.image("dev/data/built/pre_tt.RData")
@@ -172,8 +172,8 @@ qs::qload("dev/data/built/scales_variables_modules.qsm")
 
 # Postal codes ------------------------------------------------------------
 
-postal_codes <- build_postal_codes(census_scales$DA$ID)
-qs::qsave(postal_codes, "data/postal_codes.qs")
+# postal_codes <- build_postal_codes(census_scales$DA$ID)
+# qs::qsave(postal_codes, "data/postal_codes.qs")
 
 
 # Map zoom levels ---------------------------------------------------------
@@ -195,7 +195,8 @@ full_census_scales <-
                       levels = c("CSD", "DA"),
                       crs = crs,
                       fill_CTs_with_CSDs = FALSE,
-                      switch_full_geos = TRUE)
+                      switch_full_geos = TRUE,
+                      area_threshold = 0.01)
 
 
 # Do not upload grids, as there is a function just for it.
