@@ -347,19 +347,25 @@ tictoc::toc()
 
 # Should be done once the data is saved
 
-future::plan(future::multisession(), workers = 2)
-# ONLY PROCESS FOR FIRST SCALE
+future::plan(future::multisession(), workers = 4)
+
+# pe_main_card_data <- placeex_main_card_data(scales = scales_variables_modules$scales,
+#                                             DA_table = census_scales$DA,
+#                                             region_DA_IDs = census_scales$DA$ID,
+#                                             crs = crs,
+#                                             regions_dictionary = regions_dictionary)
+# 
+# # ONLY KEEP FIRST SCALE
+# pe_main_card_data$main_card_data <- lapply(pe_main_card_data$main_card_data, lapply, `[`, 1)
+# pe_main_card_data$avail_df <- dplyr::distinct(pe_main_card_data$avail_df, region, .keep_all = TRUE)
+# 
+# qs::qsave(pe_main_card_data, file = "data/pe_main_card_data.qs")
+pe_main_card_data <- qs::qread("data/pe_main_card_data.qs")
+
 svm_first_scale <- scales_variables_modules
 svm_first_scale$scales <- lapply(svm_first_scale$scales, `[`, 1)
 
-pe_main_card_data <- placeex_main_card_data(scales = svm_first_scale$scales,
-                                            DA_table = census_scales$DA,
-                                            region_DA_IDs = census_scales$DA$ID,
-                                            crs = crs,
-                                            regions_dictionary = regions_dictionary)
-qs::qsave(pe_main_card_data, file = "data/pe_main_card_data.qs")
-pe_main_card_data <- qs::qread("data/pe_main_card_data.qs")
-
+library(curbcut)
 placeex_main_card_rmd(scales_variables_modules = svm_first_scale,
                       pe_main_card_data = pe_main_card_data,
                       regions_dictionary = regions_dictionary,
@@ -368,7 +374,7 @@ placeex_main_card_rmd(scales_variables_modules = svm_first_scale,
                       tileset_prefix = "com",
                       mapbox_username = "curbcut",
                       rev_geocode_from_localhost = TRUE,
-                      overwrite = TRUE)
+                      overwrite = FALSE)
 
 # Save the place explorer files, which serves as a 'does it exist' for `curbcut`
 pe_docs <- list.files("www/place_explorer/", full.names = TRUE)
