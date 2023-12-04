@@ -9,4 +9,6 @@ curbcut::ui(
   twitter_handler = "@curbcutca", 
   website_url = "https://comox.curbcut.ca", 
   share_jpg = "https://comox.curbcut.ca/share.jpg",
-  apple_touch_icon = "https://comox.curbcut.ca/logo192.jpg")
+  apple_touch_icon = "https://comox.curbcut.ca/logo192.jpg",
+  lang_init = "en",
+  show_lang_button = FALSE)

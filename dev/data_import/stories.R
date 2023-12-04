@@ -14,7 +14,8 @@ build_stories <- function() {
       name_id = "TKTK",
       title = paste0("TKTK"),
       short_title = "TKTK",
-      preview = paste0("TKTK"),
+      preview_en = paste0("TKTK"),
+      preview_fr = "TKTK",
       themes = c("Environmental racism", "Green gentrification", 
                  "Community activism", "Urban renewal", "Neighbourhood history"),
       lon = -73.574962, 
@@ -23,7 +24,7 @@ build_stories <- function() {
   
   # Create images and mapping -----------------------------------------------
   
-  stories_mapping <- stories_atlas_mapping(stories = stories)
+  stories <- stories_map_images(stories = stories)
   
   
   # Knit all stories Rmds ---------------------------------------------------
@@ -34,7 +35,6 @@ build_stories <- function() {
   
   # Return ------------------------------------------------------------------
   
-  return(list(stories = stories,
-              stories_mapping = stories_mapping))
+  return(stories = stories)
   
 }

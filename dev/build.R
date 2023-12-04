@@ -10,10 +10,10 @@ invisible(lapply(list.files("dev/data_import", full.names = TRUE), source))
 
 # Base of the study region and dictionaries -------------------------------
 
-# All regions
-all_tables <-
-  list("CD" = c("CSD", "DA", "building"))
-
+# Possible sequences for autozooms. Every module must have one or multiple of these
+# possible scale sequences.
+scales_sequences <- list(c("CSD", "DA", "DB", "building"),
+                         c("CSD", "DA", "building"))
 
 # List all the regions geometries to create the master polygon
 all_regions <- list(CD = list(CD = 5926))
@@ -24,7 +24,7 @@ crs <- base_polygons$crs
 # Create the region dictionary
 regions_dictionary <-
   regions_dictionary(
-    all_tables = all_tables,
+    all_regions = all_regions,
     region = c("CD"),
     name = c(CD = "Census Division Area"),
     to_compare = c(CD = "in the Comox Valley region"),
@@ -39,7 +39,7 @@ regions_dictionary <-
 census_scales <-
   build_census_scales(master_polygon = base_polygons$master_polygon,
                       regions = base_polygons$province_cancensus_code,
-                      levels = c("CSD", "DA"),
+                      levels = c("CSD", "DA", "DB"),
                       fill_CTs_with_CSDs = FALSE,
                       crs = crs)
 
@@ -75,16 +75,23 @@ scales_dictionary <-
 all_scales <- c(census_scales,
                 list(building = building))
 
-scales_consolidated <- consolidate_scales(all_tables = all_tables,
+scales_consolidated <- consolidate_scales(scales_sequences = scales_sequences,
                                           all_scales = all_scales,
                                           regions = base_polygons$regions,
-                                          crs = crs,
-                                          match_with_centroids_regions = NULL)
+                                          crs = crs)
 
+regions_dictionary <- regions_dictionary_add_scales(
+  regions_dictionary = regions_dictionary,
+  region_dict_scales = scales_consolidated$for_region_dict_scales)
+
+scales_dictionary <- add_regions_to_scales_dictionary(
+  scales_dictionary = scales_dictionary, regions = base_polygons$regions,
+  scales_consolidated = scales_consolidated,
+  DA_carto = base_polygons$DA_carto)
 
 # Verify conformity -------------------------------------------------------
 
-verify_dictionaries(all_tables = all_tables,
+verify_dictionaries(scales = scales_consolidated$scales,
                     regions_dictionary = regions_dictionary,
                     scales_dictionary = scales_dictionary)
 
@@ -92,13 +99,17 @@ verify_dictionaries(all_tables = all_tables,
 # Create the modules and variables tables ---------------------------------
 
 scales_variables_modules <-
-  append_empty_variables_table(scales_consolidated = scales_consolidated)
+  append_empty_variables_table(scales_consolidated = scales_consolidated$scales)
 scales_variables_modules <-
   append_empty_modules_table(scales = scales_variables_modules)
+scales_variables_modules$data <- lapply(scales_consolidated$scales, \(x) list())
 
+qs::qsavem(census_scales, scales_variables_modules, crs,
+           scales_dictionary, regions_dictionary, base_polygons, 
+           scales_consolidated, all_scales, scales_sequences,
+           file = "dev/data/built/empty_scales_variables_modules.qsm")
+qs::qload("dev/data/built/empty_scales_variables_modules.qsm")
 
-save.image("dev/data/built/empty_scales.RData")
-load("dev/data/built/empty_scales.RData")
 # Build the datasets ------------------------------------------------------
 
 future::plan(future::multisession, workers = 4)
@@ -111,7 +122,13 @@ scales_variables_modules <-
   ba_census_data(scales_variables_modules = scales_variables_modules,
                  region_DA_IDs = census_scales$DA$ID,
                  crs = crs,
-                 housing_module = TRUE)
+                 housing_module = TRUE,
+                 scales_sequences = scales_sequences,
+                 scales_to_interpolate = {
+                   names(scales_variables_modules$scales)[
+                     !names(scales_variables_modules$scales) %in% c("building", "street", "DB")
+                   ]
+                 })
 census_variables <- get_census_vectors_details()
 
 future::plan(future::multisession(), workers = 6)
@@ -123,41 +140,70 @@ future::plan(future::multisession(), workers = 6)
 scales_variables_modules <-
   ru_alp(scales_variables_modules = scales_variables_modules,
          crs = crs,
-         region_DA_IDs = census_scales$DA$ID)
+         region_DA_IDs = census_scales$DA$ID,
+         scales_sequences = scales_sequences)
 scales_variables_modules <-
   ru_canbics(scales_variables_modules = scales_variables_modules,
              crs = crs,
-             region_DA_IDs = census_scales$DA$ID)
+             region_DA_IDs = census_scales$DA$ID,
+             scales_sequences = scales_sequences)
 scales_variables_modules <-
   ru_lst(scales_variables_modules = scales_variables_modules,
          region_DA_IDs = census_scales$DA$ID,
-         crs = crs)
+         crs = crs,
+         scales_sequences = scales_sequences)
 
 scales_variables_modules <- 
   ba_ndvi(scales_variables_modules = scales_variables_modules, 
           master_polygon = base_polygons$master_polygon, 
-          all_scales = all_scales, data_output_path = "dev/data/ndvi/", 
-          crs = crs)
-
-# # Add access to amenities module
-# traveltimes <-
-#   accessibility_get_travel_times(region_DA_IDs = census_scales$DA$ID)
-# qs::qsave(traveltimes, "dev/data/built/traveltimes.qs")
-traveltimes <- qs::qread("dev/data/built/traveltimes.qs")
+          all_scales = all_scales, 
+          data_output_path = "dev/data/ndvi/", 
+          crs = crs,
+          scales_sequences = scales_sequences)
 
 save.image("dev/data/built/pre_tt.RData")
 load("dev/data/built/pre_tt.RData")
 
-future::plan(future::multisession(), workers = 2)
+# Access ------------------------------------------------------------------
+
+# # Calculate the travel time matrice
+# DB_centroid <- scales_variables_modules$scales$DB
+# DB_centroid <- sf::st_centroid(DB_centroid)
+# DB_centroid <- sf::st_transform(DB_centroid, 4326)
+# DB_centroid <- DB_centroid[c("ID")]
+# 
+# future::plan(future::multisession(), workers = 8)
+# traveltimes <- cc.data::tt_calculate_all_modes(
+#   DA_table = DB_centroid, 
+#   dest_folder = "dev/data/ttm",
+#   osm_pbf = paste0("http://download.geofabrik.de/north-america/canada/british-",
+#                    "columbia-latest.osm.pbf"))
+# # Convert to minutes
+# traveltimes <- lapply(traveltimes, \(tt) {
+#   lapply(tt, \(t) {
+#     t[[2]] <- t[[2]] / 60
+#     t
+#   })
+# })
+# qs::qsave(traveltimes, "dev/data/built/traveltimes.qs")
+traveltimes <- qs::qread("dev/data/built/traveltimes.qs")
+
+# Get the amenities
 scales_variables_modules <-
   ba_accessibility_points(scales_variables_modules = scales_variables_modules,
-                          region_DA_IDs = census_scales$DA$ID,
+                          region_DA_or_DB_IDs = census_scales$DB$ID,
                           traveltimes = traveltimes, 
-                          crs = crs)
+                          themes = c("healthcare", "educational", "cultural"),
+                          crs = crs,
+                          scales_sequences = scales_sequences,
+                          DA_DB = "DB",
+                          default_var = "access_bicycle_educational_total")
 
-save.image("dev/data/built/scales_variables_modules.RData")
-load("dev/data/built/scales_variables_modules.RData")
-
+# BC zoning
+scales_variables_modules <-
+  zoning(scales_variables_modules = scales_variables_modules, 
+         username = "curbcut", 
+         access_token = .cc_mb_token)
 
 # Post process
 scales_variables_modules$scales <- 
@@ -165,8 +211,8 @@ scales_variables_modules$scales <-
 
 
 qs::qsavem(census_scales, scales_variables_modules, crs, census_variables,
-           scales_dictionary, regions_dictionary, all_tables, base_polygons,
-           all_scales,
+           scales_dictionary, regions_dictionary, base_polygons,
+           all_scales, scales_sequences,
            file = "dev/data/built/scales_variables_modules.qsm")
 qs::qload("dev/data/built/scales_variables_modules.qsm")
 
@@ -179,103 +225,30 @@ qs::qload("dev/data/built/scales_variables_modules.qsm")
 # Map zoom levels ---------------------------------------------------------
 
 map_zoom_levels <- map_zoom_levels_create_all(
-  all_tables = all_tables,
-  zoom_levels = list(first = 0, DA = 10, building = 16))
+  scales_sequences = scales_sequences,
+  zoom_levels = list(first = 0, DA = 10, DB = 11, building = 16))
 
 map_zoom_levels_save(data_folder = "data/", map_zoom_levels = map_zoom_levels)
 
 
-# Tilesets ----------------------------------------------------------------
-
-# Prepare by getting the census scales with geometries which spans over water
-# Build census scales
-full_census_scales <-
-  build_census_scales(master_polygon = base_polygons$master_polygon,
-                      regions = base_polygons$province_cancensus_code,
-                      levels = c("CSD", "DA"),
-                      crs = crs,
-                      fill_CTs_with_CSDs = FALSE,
-                      switch_full_geos = TRUE,
-                      area_threshold = 0.01)
+# # Tilesets ----------------------------------------------------------------
+# 
+# tileset_upload_all(all_scales = scales_variables_modules$scales,
+#                    map_zoom_levels = map_zoom_levels,
+#                    prefix = "com",
+#                    username = "curbcut",
+#                    access_token = .cc_mb_token)
 
 
-# Do not upload grids, as there is a function just for it.
-all_scales_t <- scales_variables_modules$scales
-map_zoom_levels_t <- map_zoom_levels
+# Add possible regions to modules -----------------------------------------
 
-# Before loading the tilesets, switch the geometries.
-all_scales_t <- cc.buildr::map_over_scales(
-  all_scales_t,
-  fun = \(geo = geo, scales = scales,
-          scale_name = scale_name, scale_df = scale_df) {
+scales_variables_modules <- pages_regions(svm = scales_variables_modules,
+                                          regions_dictionary = regions_dictionary)
 
-    # If it'S not census, return raw
-    if (!scale_name %in% names(full_census_scales)) return(scale_df)
-
-    df <- sf::st_drop_geometry(scale_df)
-    merge(df, full_census_scales[[scale_name]]["ID"], by = "ID", all.x = TRUE,
-          all.y = FALSE)
-
-  })
-
-
-tileset_upload_all(all_scales = all_scales_t,
-                   map_zoom_levels = map_zoom_levels_t,
-                   prefix = "com",
-                   username = "curbcut",
-                   access_token = .cc_mb_token)
-
-
-
-# Did you know ------------------------------------------------------------
-
-library(tidyverse)
-vars_dyk <- dyk_prep(scales_variables_modules, all_tables)
-dyk <- dyk_uni(vars_dyk, 
-               svm = scales_variables_modules, 
-               translation_df = NULL,
-               langs = c("en"), 
-               scales_dictionary = scales_dictionary)
-# dyk <- rbind(dyk, dyk_delta(vars_dyk, scales_variables_modules))
-# dyk <- rbind(dyk, dyk_bivar(vars_dyk, scales_variables_modules))
-qs::qsave(dyk, "data/dyk.qs")
-
-
-# Produce colours ---------------------------------------------------------
-
-colours_dfs <- cc.buildr::build_colours()
-
-qs::qsave(colours_dfs, "data/colours_dfs.qs")
-
-
-# Write stories -----------------------------------------------------------
-
-# # stories <- build_stories()
-# stories_mapping <- stories$stories_mapping
-# stories <- stories$stories
-# qs::qsavem(stories, stories_mapping, file = "data/stories.qsm")
-# stories_create_tileset(stories = stories,
-#                        prefix = "mtl",
-#                        username = "sus-mcgill",
-#                        access_token = .cc_mb_token)
-
-# scales_variables_modules$modules <-
-#   scales_variables_modules$modules |>
-#   add_module(
-#     id = "stories",
-#     theme = "Urban life",
-#     nav_title = "Comox stories",
-#     title_text_title = "Comox stories",
-#     title_text_main = paste0(
-#       "Explore narrative case studies about specific urban sustainability and ",
-#       "planning issues in the Comox region."),
-#     title_text_extra = paste0(
-#       "<p>These narrative case studies are written by the Curbcut team and its contributors."),
-#     metadata = FALSE,
-#     dataset_info = ""
-#   )
 
 # Place explorer page ----------------------------------------------------
+
+avail_scale_combinations <- sapply(scales_sequences, paste0, collapse = "_")
 
 # Add the place explorer in the modules dataframe
 scales_variables_modules$modules <-
@@ -296,14 +269,43 @@ scales_variables_modules$modules <-
              ),
              metadata = FALSE,
              dataset_info = "",
-             regions = regions_dictionary$region[regions_dictionary$pickable])
+             avail_scale_combinations = avail_scale_combinations,
+             regions = regions_dictionary$region)
 
 
-# Home page ---------------------------------------------------------------
+# Produce colours ---------------------------------------------------------
 
-home_page(modules = scales_variables_modules$modules,
-          stories = NULL)
+colours_dfs <- cc.buildr::build_colours()
+qs::qsave(colours_dfs, "data/colours_dfs.qs")
 
+
+# Write stories -----------------------------------------------------------
+
+# stories <- build_stories()
+# qs::qsave(stories, file = "data/stories.qs")
+# stories_create_tileset(stories = stories,
+#                        prefix = "com",
+#                        username = "curbcut",
+#                        access_token = .cc_mb_token)
+# cc.buildr::resize_image(folder = "www/stories/photos/", max_size_in_MB = 1)
+
+
+# # Add Montréal stories
+# scales_variables_modules$modules <-
+#   scales_variables_modules$modules |>
+#   add_module(
+#     id = "stories",
+#     theme = "Urban life",
+#     nav_title = "Comox stories",
+#     title_text_title = "Comox stories",
+#     title_text_main = paste0(
+#       "Explore narrative case studies about specific urban sustainability and ",
+#       "planning issues in the Comox region."),
+#     title_text_extra = paste0(
+#       "<p>These narrative case studies are written by the Curbcut team and its contributors."),
+#     metadata = FALSE,
+#     dataset_info = ""
+#   )
 
 # Save variables ----------------------------------------------------------
 
@@ -313,15 +315,13 @@ qs::qsave(scales_variables_modules$variables, file = "data/variables.qs")
 # Save QS data ------------------------------------------------------------
 
 save_all_scales_qs(data_folder = "data/", 
-                   all_scales = scales_variables_modules$scales,
-                   variables = scales_variables_modules$variables)
+                   svm = scales_variables_modules)
 
 
 # Save .qsm ---------------------------------------------------------------
 
 save_short_tables_qs(data_folder = "data/", 
-                     all_scales = scales_variables_modules$scales,
-                     skip_scales = c("building"))
+                     all_scales = scales_variables_modules$scales)
 save_geometry_export(data_folder = "data/", 
                      all_scales = scales_variables_modules$scales)
 
@@ -334,6 +334,19 @@ save_bslike_sqlite("building", all_scales = scales_variables_modules$scales)
 # Save other global data --------------------------------------------------
 
 qs::qsave(census_variables, file = "data/census_variables.qs")
+
+# For compare, only keep the large brackets of age
+scales_variables_modules$modules$var_right <- lapply(
+  scales_variables_modules$modules$var_right, \(x) {
+    if (is.null(x)) return(NULL)
+    not_age <- x[!grepl("^age_", x)]
+    age <- x[grepl("^age_", x)]
+    
+    age_keep <- age[age %in% c("age_0_14", "age_15_64", "age_65_plus")]
+    
+    c(not_age, age_keep)
+  })
+
 qs::qsave(scales_variables_modules$modules, file = "data/modules.qs")
 qs::qsave(scales_dictionary, file = "data/scales_dictionary.qs")
 qs::qsave(regions_dictionary, file = "data/regions_dictionary.qs")
@@ -341,6 +354,23 @@ tictoc::toc()
 
 # Write data to AWS bucket
 # cc.data::bucket_write_folder(folder = "data", bucket = "curbcut.toronto.data")
+
+# Create DYKs -------------------------------------------------------------
+
+library(tidyverse)
+vars_dyk <- dyk_prep(svm = scales_variables_modules, scales_dictionary = scales_dictionary)
+variables <- scales_variables_modules$variables
+dyk <- dyk_uni(vars_dyk,
+               svm = scales_variables_modules,
+               langs = c("en", "fr"),
+               scales_dictionary = scales_dictionary)
+# dyk <- rbind(dyk, dyk_delta(vars_dyk, scales_variables_modules))
+# dyk <- rbind(dyk, dyk_bivar(vars_dyk, scales_variables_modules))
+qs::qsave(dyk, "data/dyk.qs")
+
+# Home page ---------------------------------------------------------------
+
+home_page(modules = scales_variables_modules$modules, stories = NULL)
 
 
 # Place explorer content creation -----------------------------------------

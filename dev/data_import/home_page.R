@@ -64,16 +64,7 @@ home_page <- function(modules, stories = NULL, data_path = "data/") {
                       "est. We developed the index by building a travel time matrix for the e",
                       "ntire country, using a 15-minute walk buffer on the street network."
                     ),
-                    link = "alp") |> 
-    tibble::add_row(id = "census", 
-                    icon = "demographics", 
-                    title_en = "2021 Census", 
-                    title_fr = "Recensement de 2021", 
-                    text_en = paste0(
-                      "We’ve added new data to the site! 2021 Census data is now available on",
-                      " all pages."
-                    ),
-                    link = NA)
+                    link = "alp")
   
   
   # Tibble for the discover section -----------------------------------------

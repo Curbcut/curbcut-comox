@@ -1,1 +1,1 @@
-curbcut::server()
+curbcut::server(lang_init = "en", show_lang_button = FALSE)
