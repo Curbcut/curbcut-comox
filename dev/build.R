@@ -67,7 +67,8 @@ scales_dictionary <-
                              plur = "buildings",
                              slider_title = "Building",
                              place_heading = "{name}",
-                             place_name = "{name}")
+                             place_name = "{name}",
+                             subtext = NA)
 
 
 # Consolidate scales ------------------------------------------------------
@@ -122,7 +123,6 @@ scales_variables_modules <-
   ba_census_data(scales_variables_modules = scales_variables_modules,
                  region_DA_IDs = census_scales$DA$ID,
                  crs = crs,
-                 housing_module = TRUE,
                  scales_sequences = scales_sequences,
                  scales_to_interpolate = {
                    names(scales_variables_modules$scales)[
@@ -193,7 +193,7 @@ scales_variables_modules <-
   ba_accessibility_points(scales_variables_modules = scales_variables_modules,
                           region_DA_or_DB_IDs = census_scales$DB$ID,
                           traveltimes = traveltimes, 
-                          themes = c("healthcare", "educational", "cultural"),
+                          themes = c("healthcare", "educational"),
                           crs = crs,
                           scales_sequences = scales_sequences,
                           DA_DB = "DB",
