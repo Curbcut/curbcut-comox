@@ -10,8 +10,7 @@ zoning_colour_pal <- tibble::tibble(group = c("COMMERCIAL", "RESIDENTIAL", "OTHE
 # Sorting in alphabetical order of 'group'
 zoning_colour_pal <- zoning_colour_pal[order(zoning_colour_pal$group_short), ]
 
-
-# Alley special functions
+# Zoning special functions
 zoning_info_table <- function(select_id) {
   
   if (!is.na(select_id)) {
@@ -125,6 +124,137 @@ zoning_legend <- function() {
 }
 
 
+# Residential mode --------------------------------------------------------
+
+res_cat <- zoning_df$res_cat[!is.na(zoning_df$res_cat)] |> unique()
+
+res_zoning_colour_pal <- tibble::tibble(group = res_cat,
+                                        group_short = res_cat,
+                                        fill = c("#9E9090", "#F5D574", 
+                                                 "#A3B0D1", "#ADB033", 
+                                                 "#CD718C", "#73AD80"))
+res_zoning_colour_pal <- res_zoning_colour_pal[order(res_zoning_colour_pal$group_short), ]
+
+scale_fill_zoning_res <- function(...) {
+  
+  zon <- zoning_df[!is.na(zoning_df$res_cat), c("ID", "res_cat")]
+  df <- merge(zon, res_zoning_colour_pal[c("group", "fill")], 
+              by.x = "res_cat", 
+              by.y = "group")
+  df <- df[c("ID", "fill")]
+  names(df)[1] <- "group"
+  
+  cc.map::map_choropleth_fill_fun(
+    df = df[c("group", "fill")],
+    get_col = "ID",
+    fallback = "transparent")
+}
+
+zoning_legend_res <- function() {
+  
+  # Grab labels
+  breaks <- res_zoning_colour_pal$group_short
+  
+  # Construct the dataframe
+  df <- tibble::tibble(group = 1:6, y = 1,
+                       fill = res_zoning_colour_pal$fill,
+                       half = c(1,1,1,2,2,2))
+  
+  # Make the plot
+  df |>
+    ggplot2::ggplot(ggplot2::aes(
+      xmin = group - 1, xmax = group, ymin = y - 1,
+      ymax = y, fill = fill
+    )) +
+    ggplot2::geom_rect() +
+    ggplot2::scale_x_continuous(
+      breaks = df$group - 0.5,
+      labels = breaks
+    ) +
+    ggplot2::scale_y_continuous(labels = NULL) +
+    ggplot2::scale_fill_manual(values = stats::setNames(
+      df$fill, df$fill
+    )) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(text = ggplot2::element_text(family = "acidgrotesk-book", size = 12),
+                   legend.position = "none",
+                   panel.grid = ggplot2::element_blank()) +
+    ggplot2::facet_wrap(~half, scales = "free_x", ncol = 1, 
+                        labeller = ggplot2::as_labeller(function(half) ""))
+}
+
+zoning_info_table_res <- function(select_id) {
+  
+  if (!is.na(select_id)) {
+    return(zoning_df$text[zoning_df$ID == select_id])
+  }
+  
+  # Introduction paragraph
+  intro <- "<p>The zoning distribution across different areas is as follows:"
+  
+  # Creating bullet points for each zoning type
+  bullet_points <- apply(zones_res, 1, function(row) {
+    sprintf("<li>'<b>%s</b>' zones cover approximately %s square kilometers, or %s of the zoned areas.", 
+            row["zoning"], row["area_km2"], row["area_pct"])
+  })
+  
+  # Combine bullet points into a single text
+  bullet_text <- paste(bullet_points, collapse = "\n")
+  
+  # Final message
+  return(paste(intro, "<br><ul>", bullet_text, sep = ""))
+  
+}
+
+zoning_graph_res <- function(select_id) {
+  
+  theme_default <- list(
+    ggplot2::theme_minimal(),
+    ggplot2::theme(
+      text = ggplot2::element_text(family = "acidgrotesk-book", size = 12),
+      legend.position = "none",
+      panel.grid.minor.x = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.minor.y = ggplot2::element_blank()
+    )
+  )
+  
+  zoning_for_gg <- zones_res
+  zoning_for_gg$zoning_short <- sapply(zoning_for_gg$zoning, \(x) {
+    res_zoning_colour_pal$group_short[res_zoning_colour_pal$group == x]
+  }, USE.NAMES = FALSE)
+  zoning_for_gg$area_km2 <- as.numeric(zoning_for_gg$area_km2)
+  
+  plot <-
+    zoning_for_gg |>
+    ggplot2::ggplot(ggplot2::aes(x = zoning_short, y = area_km2, fill = zoning_short)) +
+    ggplot2::geom_col() +
+    ggplot2::scale_fill_manual(breaks = res_zoning_colour_pal$group_short,
+                               values = res_zoning_colour_pal$fill) +
+    ggplot2::labs(title = NULL,
+                  x = NULL,
+                  y = "Area (km2)") +
+    theme_default +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1))
+  
+  if (!is.na(select_id)) {
+    val <- zoning_df$res_cat[zoning_df$ID == select_id]
+    val <- res_zoning_colour_pal$group_short[res_zoning_colour_pal$group == val]
+    if (!any(is.na(val))) {
+      plot <-
+        plot +
+        ggplot2::geom_vline(
+          xintercept = val,
+          colour = "black", linewidth = 1.5
+        )
+    }
+  }
+  
+  plot
+}
+
+
+
 # Special zoning servers --------------------------------------------------
 
 legend_zoning_server <- function(id, r, legend_fun) {
@@ -208,6 +338,8 @@ zoning_UI <- function(id) {
       # Sidebar
       curbcut::sidebar_UI(
         id = shiny::NS(id, id),
+        curbcut::checkbox_UI(shiny::NS(id, id), label = "Residential only", 
+                             value = FALSE),
         bottom = shiny::tagList(
           curbcut::legend_UI(shiny::NS(id, id)),
         )
@@ -230,10 +362,6 @@ zoning_UI <- function(id) {
 
 zoning_server <- function(id, r) {
   shiny::moduleServer(id, function(input, output, session) {
-    
-    shiny::observe({
-      shinyjs::hide("zoning-left_widgets")
-    })
 
     output[[shiny::NS(id, "map_ph")]] <- shiny::renderUI({
       cc.map::map_input(
@@ -258,6 +386,10 @@ zoning_server <- function(id, r) {
         map_viewstate = map_viewstate()
       ))
     }, ignoreInit = TRUE)
+    
+    # Residential only checkbox
+    res <- curbcut::checkbox_server(id = id, r = r, 
+                                    label = shiny::reactive("Residential only"))
 
     # Update selected ID
     curbcut::update_select_id(id = id, r = r, data = data)
@@ -271,7 +403,7 @@ zoning_server <- function(id, r) {
     legend_zoning_server(
       id = id,
       r = r,
-      legend_fun = shiny::reactive(zoning_legend)
+      legend_fun = shiny::reactive(if (res())zoning_legend_res else zoning_legend)
     )
 
     # Update map in response to variable changes or zooming
@@ -283,7 +415,7 @@ zoning_server <- function(id, r) {
       zoom = r[[id]]$zoom,
       coords = r[[id]]$coords,
       vars = shiny::reactive(NULL),
-      fill_fun = shiny::reactive(scale_fill_zoning), 
+      fill_fun = shiny::reactive(if (res()) scale_fill_zoning_res else scale_fill_zoning), 
       fill_fun_args = shiny::reactive(list()),
       outline_color = shiny::reactive("white"),
       outline_width = shiny::reactive(0.1),
@@ -294,9 +426,9 @@ zoning_server <- function(id, r) {
     explore_zoning_server(
       id = id,
       r = r,
-      table_fun = shiny::reactive(zoning_info_table),
+      table_fun = shiny::reactive(if (res()) zoning_info_table_res else zoning_info_table),
       table_args = shiny::reactive(list(select_id = r[[id]]$select_id())),
-      graph_fun = shiny::reactive(zoning_graph),
+      graph_fun = shiny::reactive(if (res()) zoning_graph_res else zoning_graph),
       graph_args = shiny::reactive(list(select_id = r[[id]]$select_id()))
     )
 

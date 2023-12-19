@@ -117,36 +117,124 @@ zoning <- function(scales_variables_modules, username, access_token) {
              "20Bylaw%201850_Zoning_at%201Mar2023.pdf")
     }
     # Usage
-    usage <- (\(x) {
-      if (df$zone_desc == "RESIDENTIAL ONE") return(" is single residential")
-      if (grepl("RESIDENTIAL ONE (A|B|C|D)", df$zone_desc)) return(" is single residential")
-      if (grepl("RESIDENTIAL ONE (E|S)", df$zone_desc)) return("s are single residential, carriage house and secondary residential")
-      if (grepl("RESIDENTIAL TWO", df$zone_desc)) return("s are duplex, carriage house and secondary residential")
-      if (grepl("RESIDENTIAL THREE", df$zone_desc)) return(" is low density multi residential")
-      if (grepl("RESIDENTIAL FOUR", df$zone_desc)) return(" is medium and high density multi residential")
-      if (grepl("RESIDENTIAL FIVE", df$zone_desc)) return(" is low density multi residential")
-      if (grepl("RURAL RESIDENTIAL", df$zone_desc)) return(" is rural single residential")
-      if (grepl("MOBILE HOME", df$zone_desc)) return(" is mobile home residential")
-      " is unknown"
-    })()
+    usage <- 
+      if (df$provider == "COURTENAY") {
+        (\(x) {
+          if (df$zone_desc == "RESIDENTIAL ONE") return(" is single residential")
+          if (grepl("RESIDENTIAL ONE (A|B|C|D)", df$zone_desc)) return(" is single residential")
+          if (grepl("RESIDENTIAL ONE (E|S)", df$zone_desc)) return("s are single residential, carriage house and secondary residential")
+          if (grepl("RESIDENTIAL TWO", df$zone_desc)) return("s are duplex, carriage house and secondary residential")
+          if (grepl("RESIDENTIAL THREE", df$zone_desc)) return(" is low density multi residential")
+          if (grepl("RESIDENTIAL FOUR", df$zone_desc)) return(" is medium and high density multi residential")
+          if (grepl("RESIDENTIAL FIVE", df$zone_desc)) return(" is low density multi residential")
+          if (grepl("RURAL RESIDENTIAL", df$zone_desc)) return(" is rural single residential")
+          if (grepl("MOBILE HOME", df$zone_desc)) return(" is mobile home residential")
+          " is unknown"
+        })()
+      } else {
+        (\(x) {
+          if (grepl("^R\\d", df$zone_code)) return(" is single residential")
+          if (grepl("^RM1", df$zone_code)) return(" is low density multi residential")
+          if (grepl("^RM2", df$zone_code)) return(" is low density multi residential")
+          if (grepl("^RM3.1", df$zone_code)) return(" is low density multi residential")
+          if (grepl("^RM3.2", df$zone_code)) return(" is medium and high density multi residential")
+          if (grepl("^RM", df$zone_code)) return(" is medium and high density multi residential")
+          if (grepl("^CD1.1", df$zone_code)) return(" is single residential")
+          if (grepl("^CD1.2", df$zone_code)) return(" is multi residential")
+          if (grepl("^CD2", df$zone_code)) return(" is single residential")
+          if (grepl("^CD5", df$zone_code)) return(" is single residential")
+          if (grepl("^CD9", df$zone_code)) return(" is single residential")
+          if (grepl("^CD13", df$zone_code)) return(" is single residential")
+          if (grepl("^CD14", df$zone_code)) return(" is single residential")
+          if (grepl("^CD15", df$zone_code)) return(" is single residential")
+          if (grepl("^CD17", df$zone_code)) return(" is single residential")
+          if (grepl("^CD18", df$zone_code)) return(" is single residential")
+          if (grepl("^CD22", df$zone_code)) return(" is low density multi residential")
+          if (grepl("^CD23", df$zone_code)) return(" is single residential")
+          if (grepl("^CD26", df$zone_code)) return(" is single residential")
+          "Other"
+        })()
+      }
     
     out <- sprintf(paste0("<p>The permitted use%s. To know more, visit the %s's ",
-                   "<a href='%s' target = '_blank'>zoning bylaw</a>."),
-            usage, city, bylaw_url)
+                          "<a href='%s' target = '_blank'>zoning bylaw</a>."),
+                   usage, city, bylaw_url)
     
     paste0(df$text, out)
   })
   
+  zoning_df$res_cat <- sapply(seq_along(zoning_df$text), \(n) {
+    if (zoning_df$zoning[n] != "RESIDENTIAL") return(NA)
+    
+    df <- zoning_df[n, ]
+    
+    # Usage
+    if (df$provider == "COURTENAY") {
+      (\(x) {
+        if (df$zone_desc == "RESIDENTIAL ONE") return("Single")
+        if (grepl("RESIDENTIAL ONE (A|B|C|D)", df$zone_desc)) return("Single")
+        if (grepl("RESIDENTIAL ONE (E|S)", df$zone_desc)) return("Single")
+        if (grepl("RESIDENTIAL TWO", df$zone_desc)) return("Duplex")
+        if (grepl("RESIDENTIAL THREE", df$zone_desc)) return("Low multi")
+        if (grepl("RESIDENTIAL FOUR", df$zone_desc)) return("Medium+ multi")
+        if (grepl("RESIDENTIAL FIVE", df$zone_desc)) return("Low multi")
+        if (grepl("RURAL RESIDENTIAL", df$zone_desc)) return("Single")
+        if (grepl("MOBILE HOME", df$zone_desc)) return("Mobile")
+        "Other"
+      })()
+    } else {
+      (\(x) {
+        if (grepl("^R\\d", df$zone_code)) return("Single")
+        if (grepl("^RM1", df$zone_code)) return("Low multi")
+        if (grepl("^RM2", df$zone_code)) return("Low multi")
+        if (grepl("^RM3.1", df$zone_code)) return("Low multi")
+        if (grepl("^RM3.2", df$zone_code)) return("Medium+ multi")
+        if (grepl("^RM", df$zone_code)) return("Medium+ multi")
+        if (grepl("^CD1.1", df$zone_code)) return("Single")
+        if (grepl("^CD1.2", df$zone_code)) return("Medium+ multi")
+        if (grepl("^CD2", df$zone_code)) return("Single")
+        if (grepl("^CD5", df$zone_code)) return("Single")
+        if (grepl("^CD9", df$zone_code)) return("Single")
+        if (grepl("^CD13", df$zone_code)) return("Single")
+        if (grepl("^CD14", df$zone_code)) return("Single")
+        if (grepl("^CD15", df$zone_code)) return("Single")
+        if (grepl("^CD17", df$zone_code)) return("Single")
+        if (grepl("^CD18", df$zone_code)) return("Single")
+        if (grepl("^CD22", df$zone_code)) return("Low multi")
+        if (grepl("^CD23", df$zone_code)) return("Single")
+        if (grepl("^CD26", df$zone_code)) return("Single")
+        "Other"
+      })()
+    }
+    
+  })
+
   zones_t <- unique(zoning_df$zoning)
   zones <- lapply(zones_t, \(type) {
     size_km2 <- sum(zoning_df$area[zoning_df$zoning == type])
     c(prettyNum(round(size_km2  / 1e6, digits = 2), big.mark = ","),
-    scales::percent(size_km2 / sum(zoning_df$area), accuracy = 0.1))
+      scales::percent(size_km2 / sum(zoning_df$area), accuracy = 0.1))
   })
   zones <- tibble::tibble(zoning = zones_t, area_km2 = sapply(zones, `[[`, 1),
                           area_pct = sapply(zones, `[[`, 2))
   
-  qs::qsavem(zoning_df, zones, file = "data/zoning.qsm")
+  
+  zoning_df_res <- zoning_df[!is.na(zoning_df$res_cat), ]
+  
+  
+  zones_t <- unique(zoning_df_res$res_cat)
+  zones_t <- c("Single", "Duplex", "Low multi", "Medium+ multi", "Mobile", "Other")
+  zones_res <- lapply(zones_t, \(type) {
+    size_km2 <- sum(zoning_df_res$area[zoning_df_res$res_cat == type])
+    c(prettyNum(round(size_km2  / 1e6, digits = 2), big.mark = ","),
+      scales::percent(size_km2 / sum(zoning_df_res$area), accuracy = 0.1))
+  })
+  zones_res <- tibble::tibble(zoning = zones_t, area_km2 = sapply(zones_res, `[[`, 1),
+                          area_pct = sapply(zones_res, `[[`, 2))
+  
+  
+  
+  qs::qsavem(zoning_df, zones, zones_res, file = "data/zoning.qsm")
   
   # Modules table -----------------------------------------------------------
 
